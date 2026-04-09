@@ -20,13 +20,13 @@ class PresenceDetector:
             return PresenceResult(occupied=False, person_count=0, confidence=0.0)
             
         recent_variance = np.mean(self.buffer)
-        occupied = recent_variance > self.threshold
+        occupied = bool(recent_variance > self.threshold)
         
         # Confidence: ratio of recent_variance / (2 * threshold) clamped to 1.0
-        confidence = np.clip(recent_variance / (2 * self.threshold), 0, 1.0)
+        confidence = float(np.clip(recent_variance / (2 * self.threshold), 0, 1.0))
         
         # Simplification: if occupied, person_count is 1
-        person_count = 1 if occupied else 0
+        person_count = int(1 if occupied else 0)
         
         return PresenceResult(
             occupied=occupied,

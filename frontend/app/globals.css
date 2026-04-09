@@ -1,23 +1,68 @@
 @import "tailwindcss";
 
+:root {
+  font-size: 62.5%; /* 1rem = 10px */
+
+  /* Default Theme: Obsidian Dark */
+  --color-bg-primary: rgb(8, 8, 9);
+  --color-text-primary: rgb(245, 245, 243);
+  --color-surface-secondary: rgb(18, 18, 22);
+  --color-surface-highlight: rgb(26, 26, 32);
+  --color-border-main: rgba(148, 163, 184, 0.15);
+  
+  --color-acc-metal: rgb(170, 180, 195);
+  --color-acc-earth: rgb(223, 255, 17); /* Neon Volt */
+  --color-acc-water: rgb(0, 242, 255);  /* Neon Cyan */
+  --color-acc-fire: rgb(255, 62, 62);   /* Neon Crimson */
+  --color-acc-wood: rgb(180, 100, 255); /* Digital Purple */
+}
+
+[data-theme='github'] {
+  --color-bg-primary: rgb(13, 17, 23);   /* GitHub Dark BG */
+  --color-text-primary: rgb(201, 209, 217);
+  --color-surface-secondary: rgb(22, 27, 34);
+  --color-surface-highlight: rgb(48, 54, 61);
+  --color-border-main: rgb(48, 54, 61);
+
+  --color-acc-metal: rgb(139, 148, 158);
+  --color-acc-earth: rgb(35, 134, 54);  /* GitHub Green */
+  --color-acc-water: rgb(47, 129, 247);  /* GitHub Blue */
+  --color-acc-fire: rgb(248, 81, 73);    /* GitHub Red */
+  --color-acc-wood: rgb(163, 113, 247);  /* GitHub Purple */
+}
+
+[data-theme='light'] {
+  --color-bg-primary: rgb(251, 250, 245);  /* Paper White */
+  --color-text-primary: rgb(0, 0, 0);       /* True Black */
+  --color-surface-secondary: rgb(240, 239, 232);
+  --color-surface-highlight: rgb(231, 231, 224);
+  --color-border-main: rgba(0, 0, 0, 0.15);
+
+  --color-acc-metal: rgb(64, 64, 64);      /* Darker Metal */
+  --color-acc-earth: rgb(22, 101, 52);     /* Deep Forest Green */
+  --color-acc-water: rgb(30, 58, 138);     /* Navy Blue */
+  --color-acc-fire: rgb(185, 28, 28);      /* Rich Red */
+  --color-acc-wood: rgb(88, 28, 135);      /* Deep Purple */
+}
+
 @theme {
   /* Typography */
   --font-sans: var(--font-instrument-sans);
   --font-serif: var(--font-instrument-serif);
 
-  /* Tech Obsidian Palette - High Contrast */
-  --color-base-white: rgb(8, 8, 9);      /* Primary Dark BG */
-  --color-base-black: rgb(255, 255, 255); /* Primary Light Text (White) */
-  --color-base-stone-20: rgb(18, 18, 22); /* Secondary Surface */
-  --color-base-stone-50: rgb(26, 26, 32); /* Highlight Surface */
-  --color-base-stone-100: rgb(148, 163, 184); /* Labels Brightness Up */
-  --color-base-brown: rgb(203, 213, 225);      /* Sub-text / Captions Up */
+  /* Theme-aware Mapping */
+  --color-base-white: var(--color-bg-primary);
+  --color-base-black: var(--color-text-primary);
+  --color-base-stone-20: var(--color-surface-secondary);
+  --color-base-stone-50: var(--color-surface-highlight);
+  --color-base-stone-100: var(--color-acc-metal);
+  --color-base-brown: rgb(180, 185, 200); /* Lighter, more legible metal grey */
 
-  --color-accent-metal: rgb(148, 163, 184);  /* Primary Lab Labels (Up) */
-  --color-accent-earth: rgb(223, 255, 17); /* Neon Volt */
-  --color-accent-water: rgb(0, 242, 255);  /* Neon Cyan */
-  --color-accent-fire: rgb(255, 62, 62);   /* Neon Crimson */
-  --color-accent-wood: rgb(180, 100, 255); /* Digital Purple */
+  --color-accent-metal: var(--color-acc-metal);
+  --color-accent-earth: var(--color-acc-earth);
+  --color-accent-water: var(--color-acc-water);
+  --color-accent-fire: var(--color-acc-fire);
+  --color-accent-wood: var(--color-acc-wood);
 
   /* Precise Editorial Spacing from Reference */
   --spacing-26: 2.6rem;
@@ -98,7 +143,7 @@ html, body {
   right: 0;
   width: 0.1rem;
   transform: translateX(100%);
-  background-color: rgba(193, 194, 189, 0.2); /* Reverted to 0.2 for subtleness */
+  background-color: var(--color-border-main);
 }
 
 /* Fluid Typography Scale - Exact clones from design.css formulas */
@@ -123,7 +168,7 @@ html, body {
 .wifi-viz-container:-moz-full-screen {
   width: 100vw !important;
   height: 100vh !important;
-  background: rgb(8, 8, 9);
+  background: var(--color-bg-primary);
 }
 
 /* Button fill animation - Matching line 49 of reference */
@@ -144,7 +189,8 @@ a:hover .btn-fill {
 .reveal {
   opacity: 0;
   transform: translateY(2rem);
-  transition: opacity 1s cubic-bezier(0.19, 1, 0.22, 1), transform 1s cubic-bezier(0.19, 1, 0.22, 1);
+  will-change: opacity, transform;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .reveal.active {
   opacity: 1;

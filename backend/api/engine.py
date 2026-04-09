@@ -10,13 +10,28 @@ from models.presence import PresenceDetector
 from models.pose_stub import PoseStub
 import config as config
 
+class MovementInterpolator:
+    """Smoothes movement indicators using exponential moving averages to prevent jitter."""
+    def __init__(self, alpha: float = 0.2):
+        self.alpha = alpha
+        self.state: dict = {}
+
+    def smooth(self, key: str, value: float) -> float:
+        if key not in self.state:
+            self.state[key] = value
+            return value
+        # Exponential moving average filter
+        self.state[key] = (self.alpha * value) + (1 - self.alpha) * self.state[key]
+        return float(self.state[key])
+
 class SensingEngine:
     """Wires together data sources, signal processing, and models to produce sensing frames."""
     def __init__(self, source: CSISource):
         self.source = source
         self.vitals_model = VitalsModel(fps=config.FPS)
-        self.presence_detector = PresenceDetector(window_len=config.FPS * 10) # 10s buffer
+        self.presence_detector = PresenceDetector(window_len=config.FPS * 10)
         self.pose_stub = PoseStub()
+        self.interpolator = MovementInterpolator(alpha=0.15)
 
     async def start(self) -> AsyncGenerator[SensingFrame, None]:
         """Runs the pipeline and yields final SensingFrames from the current source."""
@@ -38,7 +53,18 @@ class SensingEngine:
             # 4. Pose Inference (Placeholder)
             pose_data = self.pose_stub.predict({})
             
-            # 5. Downsample amplitudes for frontend display (Every 4th subcarrier)
+            # 5. Apply Movement Interpolation/Smoothing to Vitals and Presence
+            if vitals_data["vitals"].breathing_bpm:
+                vitals_data["vitals"].breathing_bpm = self.interpolator.smooth("br", vitals_data["vitals"].breathing_bpm)
+                vitals_data["vitals"].breathing_confidence = self.interpolator.smooth("br_c", vitals_data["vitals"].breathing_confidence)
+            
+            if vitals_data["vitals"].heart_rate_bpm:
+                vitals_data["vitals"].heart_rate_bpm = self.interpolator.smooth("hr", vitals_data["vitals"].heart_rate_bpm)
+                vitals_data["vitals"].hr_confidence = self.interpolator.smooth("hr_c", vitals_data["vitals"].hr_confidence)
+
+            presence.confidence = self.interpolator.smooth("p_c", presence.confidence)
+            
+            # 6. Downsample amplitudes for frontend display (Every 4th subcarrier)
             raw_amplitude = csi_frame.amplitudes[::4].tolist()
             
             # Produce final sensing frame

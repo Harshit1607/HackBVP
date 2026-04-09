@@ -47,9 +47,12 @@ export default function AmplitudeChart({ frame }: AmplitudeChartProps) {
       }
       if (dataPoints.current.length > 150) dataPoints.current.shift()
 
-      // Waveform Draw
+      // Waveform Draw — Theme Aware
+      const style = getComputedStyle(canvas)
+      const accentColor = style.getPropertyValue('--color-acc-water').trim() || 'rgb(0, 242, 255)'
+      
       ctx.beginPath()
-      ctx.strokeStyle = 'rgb(0 242 255)' // Neon Cyan
+      ctx.strokeStyle = accentColor
       ctx.lineWidth = 2
       const step = w / (dataPoints.current.length - 1)
       
@@ -64,8 +67,8 @@ export default function AmplitudeChart({ frame }: AmplitudeChartProps) {
 
       // Tech Gradient Fill
       const grad = ctx.createLinearGradient(0, 0, 0, h)
-      grad.addColorStop(0, 'rgba(0, 242, 255, 0.1)')
-      grad.addColorStop(1, 'rgba(0, 242, 255, 0)')
+      grad.addColorStop(0, accentColor.includes('rgba') ? accentColor : accentColor.replace('rgb', 'rgba').replace(')', ', 0.1)'))
+      grad.addColorStop(1, accentColor.includes('rgba') ? accentColor.replace(/[\d.]+\)$/, '0)') : accentColor.replace('rgb', 'rgba').replace(')', ', 0)'))
       ctx.fillStyle = grad
       ctx.lineTo(w, h)
       ctx.lineTo(0, h)

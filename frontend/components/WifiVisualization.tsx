@@ -15,49 +15,73 @@ const PERSON_ROOTS: Array<{ x: number, z: number }> = [
   { x: -1.5, z: 1.0 },
 ]
 
+const HEAT_RES = 32
+
 const SKELETON_EDGES = [
-  [0, 1], [0, 2], [1, 3], [2, 4],           // face
-  [5, 6],                              // shoulders
-  [5, 7], [7, 9],                        // left arm
-  [6, 8], [8, 10],                       // right arm
-  [5, 11], [6, 12], [11, 12],              // torso
-  [11, 13], [13, 15],                    // left leg
-  [12, 14], [14, 16],                    // right leg
+  [0, 1], [0, 2], [1, 3], [2, 4],
+  [5, 6],
+  [5, 7], [7, 9],
+  [6, 8], [8, 10],
+  [5, 11], [6, 12], [11, 12],
+  [11, 13], [13, 15],
+  [12, 14], [14, 16],
 ]
 
 function buildSkeletonKeypoints(
   rootX: number,
   rootZ: number,
-  breathScale: number
+  breathScale: number,
+  walkPhase: number = 0,
+  angle: number = 0
 ): THREE.Vector3[] {
   const s = breathScale
-  return [
-    new THREE.Vector3(rootX, 1.75 * s, rootZ),  //  0 nose
-    new THREE.Vector3(rootX - 0.07, 1.72 * s, rootZ),  //  1 left eye
-    new THREE.Vector3(rootX + 0.07, 1.72 * s, rootZ),  //  2 right eye
-    new THREE.Vector3(rootX - 0.12, 1.68 * s, rootZ),  //  3 left ear
-    new THREE.Vector3(rootX + 0.12, 1.68 * s, rootZ),  //  4 right ear
-    new THREE.Vector3(rootX - 0.22, 1.45 * s, rootZ),  //  5 left shoulder
-    new THREE.Vector3(rootX + 0.22, 1.45 * s, rootZ),  //  6 right shoulder
-    new THREE.Vector3(rootX - 0.38, 1.1 * s, rootZ),  //  7 left elbow
-    new THREE.Vector3(rootX + 0.38, 1.1 * s, rootZ),  //  8 right elbow
-    new THREE.Vector3(rootX - 0.42, 0.78 * s, rootZ),  //  9 left wrist
-    new THREE.Vector3(rootX + 0.42, 0.78 * s, rootZ),  // 10 right wrist
-    new THREE.Vector3(rootX - 0.14, 0.95 * s, rootZ),  // 11 left hip
-    new THREE.Vector3(rootX + 0.14, 0.95 * s, rootZ),  // 12 right hip
-    new THREE.Vector3(rootX - 0.16, 0.52 * s, rootZ),  // 13 left knee
-    new THREE.Vector3(rootX + 0.16, 0.52 * s, rootZ),  // 14 right knee
-    new THREE.Vector3(rootX - 0.16, 0.04, rootZ),    // 15 left ankle
-    new THREE.Vector3(rootX + 0.16, 0.04, rootZ),    // 16 right ankle
+  const wp = walkPhase
+
+  const stride = 0.25
+  const armSwing = 0.3
+
+  const lLegSwing = Math.sin(wp) * stride
+  const rLegSwing = Math.sin(wp + Math.PI) * stride
+  const lArmSwing = Math.sin(wp + Math.PI) * armSwing
+  const rArmSwing = Math.sin(wp) * armSwing
+  const lKnee = Math.max(0, Math.sin(wp + 0.5)) * 0.3
+  const rKnee = Math.max(0, Math.sin(wp + Math.PI + 0.5)) * 0.3
+
+  const localKeypoints = [
+    new THREE.Vector3(0, 1.75 * s, 0),
+    new THREE.Vector3(-0.07, 1.72 * s, 0),
+    new THREE.Vector3(0.07, 1.72 * s, 0),
+    new THREE.Vector3(-0.12, 1.68 * s, 0),
+    new THREE.Vector3(0.12, 1.68 * s, 0),
+    new THREE.Vector3(-0.22, 1.45 * s, lArmSwing * 0.2),
+    new THREE.Vector3(0.22, 1.45 * s, rArmSwing * 0.2),
+    new THREE.Vector3(-0.35, 1.1 * s, lArmSwing),
+    new THREE.Vector3(0.35, 1.1 * s, rArmSwing),
+    new THREE.Vector3(-0.38, 0.78 * s, lArmSwing * 1.2),
+    new THREE.Vector3(0.38, 0.78 * s, rArmSwing * 1.2),
+    new THREE.Vector3(-0.14, 0.95 * s, 0),
+    new THREE.Vector3(0.14, 0.95 * s, 0),
+    new THREE.Vector3(-0.16, 0.52 * s, lLegSwing + lKnee * 0.2),
+    new THREE.Vector3(0.16, 0.52 * s, rLegSwing + rKnee * 0.2),
+    new THREE.Vector3(-0.16, 0.04, lLegSwing),
+    new THREE.Vector3(0.16, 0.04, rLegSwing),
   ]
+
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+
+  return localKeypoints.map(p => {
+    const rx = p.x * cos + p.z * sin
+    const rz = -p.x * sin + p.z * cos
+    return new THREE.Vector3(rx + rootX, p.y, rz + rootZ)
+  })
 }
 
 export default function WifiVisualization({ frame, connected }: WifiVisualizationProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<SensingFrame | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  
-  // High-performance orbit state with damping (target vs current)
+
   const orbitRef = useRef({
     targetTheta: 0.3,
     currentTheta: 0.3,
@@ -69,21 +93,6 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
   })
   const lastStateRef = useRef({ lastX: 0, lastY: 0, active: false })
   const lastPinchDistRef = useRef(0)
-
-  const sceneStateRef = useRef<{
-    scene: THREE.Scene
-    camera: THREE.PerspectiveCamera
-    renderer: THREE.WebGLRenderer
-    waveSpheres: THREE.Mesh[]
-    heatMesh: THREE.Points
-    figureData: Array<{
-       group: THREE.Group
-       joints: THREE.Mesh[]
-       bones: THREE.Line[]
-    }>
-    node: THREE.Mesh
-    clock: THREE.Clock
-  } | null>(null)
 
   useEffect(() => {
     frameRef.current = frame
@@ -98,173 +107,302 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
   useEffect(() => {
     if (!containerRef.current) return
     const container = containerRef.current
+    let themeObserver: MutationObserver | null = null
+    const checkLight = () => document.documentElement.getAttribute('data-theme') === 'light'
 
-    // SETUP
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x080809)
+    // ── Scene objects (closure vars) ──────────────────────────────────
+    let scene: THREE.Scene
+    let ground: THREE.Mesh
+    let waveSpheres: THREE.Mesh[] = []
+    let node: THREE.Mesh
+    let figureData: any[] = []
+    let grid: THREE.GridHelper
+    let heatMesh: THREE.Points
+    let heatGeo: THREE.BufferGeometry
+
+    const syncThemeColors = () => {
+      const styles = getComputedStyle(document.documentElement)
+      const parse = (v: string) => {
+        const m = styles.getPropertyValue(v).match(/\d+/g)
+        return m ? (parseInt(m[0]) << 16) | (parseInt(m[1]) << 8) | parseInt(m[2]) : 0x000000
+      }
+      const bg = parse('--color-bg-primary')
+      const surface = parse('--color-surface-secondary')
+      const earth = parse('--color-acc-earth')
+      const water = parse('--color-acc-water')
+      const text = parse('--color-text-primary')
+      const isLight = checkLight()
+
+      scene.background = new THREE.Color(bg)
+      ;(ground.material as THREE.MeshLambertMaterial).color.setHex(isLight ? bg : surface)
+
+      const gridMat = grid.material as THREE.LineBasicMaterial
+      gridMat.color.setHex(text)
+      gridMat.opacity = isLight ? 0.08 : 0.05
+      gridMat.transparent = true
+
+      const finalEarth = isLight ? 0x000000 : earth
+      const finalWater = water
+
+      waveSpheres.forEach(s => {
+        const sMat = s.material as THREE.MeshBasicMaterial
+        sMat.color.setHex(finalWater)
+        sMat.opacity = isLight ? 0.4 : 0.8
+      })
+
+      const nodeMat = node.material as THREE.MeshLambertMaterial
+      nodeMat.color.setHex(finalWater)
+      nodeMat.emissive.setHex(finalWater)
+      nodeMat.emissiveIntensity = isLight ? 0.1 : 1.2
+
+      figureData.forEach(fd => {
+        fd.joints.forEach((j: THREE.Mesh) => {
+          const jMat = j.material as THREE.MeshStandardMaterial
+          jMat.color.setHex(finalEarth)
+          jMat.emissive.setHex(finalEarth)
+          jMat.emissiveIntensity = isLight ? 0 : 1.0
+        })
+        fd.bones.forEach((b: THREE.Line) => {
+          const bMat = b.material as THREE.LineBasicMaterial
+          bMat.color.setHex(finalEarth)
+          bMat.opacity = 1.0
+        })
+      })
+    }
+
+    // ── Initialization ────────────────────────────────────────────────
+    scene = new THREE.Scene()
     const aspect = container.clientWidth / container.clientHeight
     const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 100)
-    
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
-    renderer.localClippingEnabled = true
     container.appendChild(renderer.domElement)
 
-    // ResizeObserver (Fix 4a)
     const ro = new ResizeObserver(() => {
-      const w = container.clientWidth
-      const h = container.clientHeight
-      camera.aspect = w / h
-      camera.updateProjectionMatrix()
-      renderer.setSize(w, h)
+      const w = container.clientWidth; const h = container.clientHeight
+      camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h)
     })
     ro.observe(container)
 
-    // Floor
-    const groundMat = new THREE.MeshLambertMaterial({
-      color: 0x121216,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-    })
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), groundMat)
+    // Ground & Grid
+    ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(14, 14),
+      new THREE.MeshLambertMaterial({ polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
+    )
     ground.rotation.x = -Math.PI / 2
     ground.receiveShadow = true
     scene.add(ground)
-
-    // Grid
-    const grid = new THREE.GridHelper(14, 20, 0x2d3748, 0x1e2024)
+    grid = new THREE.GridHelper(14, 20, 0x2d3748, 0x1e2024)
     grid.position.y = 0.002
-    const gridMat = grid.material as THREE.LineBasicMaterial
-    gridMat.opacity = 0.4; gridMat.transparent = true
     scene.add(grid)
 
-    // Waves (Fix 3: Mesh Visibility Up)
+    // WiFi node + expanding spheres
     const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const waveSpheres: THREE.Mesh[] = []
-    const sourcePos = new THREE.Vector3(-3, 0.5, -2)
     const waveGeo = new THREE.IcosahedronGeometry(1, 2)
-    
     for (let i = 0; i < 3; i++) {
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0x00f2ff,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.0,
-        depthWrite: false,
-        clippingPlanes: [clipPlane],
-      })
-      const s = new THREE.Mesh(waveGeo, mat)
-      s.position.copy(sourcePos); s.userData.phase = i / 3
-      scene.add(s); waveSpheres.push(s)
+      const s = new THREE.Mesh(waveGeo, new THREE.MeshBasicMaterial({
+        wireframe: true, transparent: true, depthWrite: false, clippingPlanes: [clipPlane]
+      }))
+      s.position.set(-3, 0.5, -2)
+      s.userData.phase = i / 3
+      scene.add(s)
+      waveSpheres.push(s)
     }
-
-    // Source Node (Fix 3: Larger + Emissive)
-    const nodeGeo = new THREE.IcosahedronGeometry(0.22, 1)
-    const nodeMat = new THREE.MeshLambertMaterial({ 
-      color: 0x00f2ff,
-      emissive: 0x00f2ff,
-      emissiveIntensity: 1.2
-    })
-    const node = new THREE.Mesh(nodeGeo, nodeMat)
-    node.position.copy(sourcePos)
+    renderer.localClippingEnabled = true
+    node = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 1), new THREE.MeshLambertMaterial())
+    node.position.set(-3, 0.5, -2)
     node.castShadow = true
     scene.add(node)
 
-    // Heatmap
-    const HEAT_RES = 20
-    const heatGeo = new THREE.BufferGeometry()
+    // Skeleton figures
+    figureData = PERSON_ROOTS.map(() => {
+      const group = new THREE.Group(); scene.add(group)
+      const joints: THREE.Mesh[] = []
+      const bones: THREE.Line[] = []
+      for (let i = 0; i < 17; i++) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial())
+        group.add(m); joints.push(m)
+      }
+      SKELETON_EDGES.forEach(() => {
+        const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ transparent: true }))
+        group.add(l); bones.push(l)
+      })
+      return { group, joints, bones }
+    })
+
+    // Heatmap (floor points)
+    heatGeo = new THREE.BufferGeometry()
     const heatPositions = new Float32Array(HEAT_RES * HEAT_RES * 3)
     const heatColors = new Float32Array(HEAT_RES * HEAT_RES * 3)
     let hIdx = 0
     for (let xi = 0; xi < HEAT_RES; xi++) {
       for (let zi = 0; zi < HEAT_RES; zi++) {
         heatPositions[hIdx * 3 + 0] = (xi / (HEAT_RES - 1)) * 10 - 5
-        heatPositions[hIdx * 3 + 1] = 0.012
+        heatPositions[hIdx * 3 + 1] = 0.015
         heatPositions[hIdx * 3 + 2] = (zi / (HEAT_RES - 1)) * 10 - 5
         hIdx++
       }
     }
     heatGeo.setAttribute('position', new THREE.BufferAttribute(heatPositions, 3))
     heatGeo.setAttribute('color', new THREE.BufferAttribute(heatColors, 3))
-    const heatMesh = new THREE.Points(heatGeo, new THREE.PointsMaterial({ size: 0.45, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false }))
+    heatMesh = new THREE.Points(heatGeo, new THREE.PointsMaterial({
+      size: 0.45, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false
+    }))
     scene.add(heatMesh)
 
-    // Figures
-    const figureData = PERSON_ROOTS.map(() => {
-      const group = new THREE.Group(); scene.add(group)
-      const joints: THREE.Mesh[] = []; const bones: THREE.Line[] = []
-      const mat = new THREE.MeshStandardMaterial({ color: 0xdfff11, emissive: 0xdfff11, emissiveIntensity: 1 })
-      for (let i = 0; i < 17; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), mat); group.add(m); joints.push(m) }
-      SKELETON_EDGES.forEach(() => { const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xdfff11, transparent: true, opacity: 0.8 })); group.add(l); bones.push(l) })
-      group.visible = false
-      return { group, joints, bones }
-    })
-
     // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4))
-    const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(5, 10, 5); dl.castShadow = true; scene.add(dl)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5))
+    const dl = new THREE.DirectionalLight(0xffffff, 1.5)
+    dl.position.set(5, 10, 5); dl.castShadow = true; scene.add(dl)
+
+    syncThemeColors()
+    themeObserver = new MutationObserver(syncThemeColors)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
     const clock = new THREE.Clock()
-    sceneStateRef.current = { scene, camera, renderer, waveSpheres, heatMesh, figureData, node, clock }
+    const lastAngles = new Array(PERSON_ROOTS.length).fill(0)
+    let smoothedIntensity = 0.8
+    const smoothedBpms = new Array(PERSON_ROOTS.length).fill(15)
+    const smoothedHrs = new Array(PERSON_ROOTS.length).fill(70)
+    const breathPhases = PERSON_ROOTS.map(() => 0)
 
-    // RENDER LOOP
+    // ── Render Loop ───────────────────────────────────────────────────
     const animate = () => {
-      const state = sceneStateRef.current
-      if (!state) return
       requestAnimationFrame(animate)
       const dt = clock.getDelta()
       const t_clock = clock.getElapsedTime()
       const fr = frameRef.current
-      const count = connected ? Math.min(fr?.presence.person_count ?? 0, PERSON_ROOTS.length) : 0
-      const bScale = 1 + Math.sin(t_clock * ((fr?.vitals.breathing_bpm ?? 15) / 60) * Math.PI * 2) * 0.02
 
-      const amplitudeIntensity = fr?.amplitude ?? 0.8
+      // ── Backend data extraction ──────────────────────────────────
+      const rawAmps: number[] = fr?.raw_amplitude ?? []
+      const breathBPM: number = fr?.vitals?.breathing_bpm ?? 15
+      const hrBPM: number = fr?.vitals?.heart_rate_bpm ?? 70
+      const personCount = connected ? Math.min(fr?.presence?.person_count ?? 0, PERSON_ROOTS.length) : 0
 
-      // Wave expansion (4s cycle - Fix 3)
-      state.waveSpheres.forEach(s => {
+      // Interpolate global intensity from CSI variance for smooth heatmap & movement
+      if (rawAmps.length > 0) {
+        const mean = rawAmps.reduce((a, b) => a + b, 0) / rawAmps.length
+        const variance = rawAmps.reduce((a, b) => a + (b - mean) ** 2, 0) / rawAmps.length
+        const targetInt = Math.min(2.0, 0.6 + Math.sqrt(variance) * 6)
+        smoothedIntensity += (targetInt - smoothedIntensity) * Math.min(1.0, dt * 8)
+      }
+
+      // ── WiFi wave spheres – amplitude modulated ──────────────────
+      waveSpheres.forEach(s => {
         const lt = ((t_clock / 4.0) + s.userData.phase) % 1
-        s.scale.setScalar(0.3 + lt * 5.5) // Start visible
-        ;(s.material as THREE.MeshBasicMaterial).opacity = (1 - lt) * 0.85 * Math.max(0.6, amplitudeIntensity)
+        s.scale.setScalar(0.3 + lt * 5.5)
+        ;(s.material as THREE.MeshBasicMaterial).opacity = (1 - lt) * 0.85 * Math.max(0.5, smoothedIntensity)
       })
 
-      state.node.rotation.y += dt * 0.5
+      node.rotation.y += dt * 0.5
 
+      // ── Skeleton figures – breathing & heartbeat synced ──────────
       figureData.forEach((data, i) => {
-        if (i < count) {
+        if (i < personCount) {
           data.group.visible = true
-          const kps = buildSkeletonKeypoints(PERSON_ROOTS[i].x, PERSON_ROOTS[i].z, bScale)
-          data.joints.forEach((m, j) => {
+
+          // Interpolate BPM for smooth phase transitions
+          smoothedBpms[i] += (breathBPM - smoothedBpms[i]) * Math.min(1.0, dt * 5)
+          smoothedHrs[i] += (hrBPM - smoothedHrs[i]) * Math.min(1.0, dt * 5)
+
+          // Advance breathing phase accumulator (independent per figure)
+          breathPhases[i] += dt * (smoothedBpms[i] / 60) * Math.PI * 2
+          const hrPhase = t_clock * (smoothedHrs[i] / 60) * Math.PI * 2
+
+          // Breathing: subtle chest/torso expansion
+          const breathDepth = rawAmps.length > 0
+            ? Math.min(0.06, (Math.max(...rawAmps) - 1.0) * 0.12)
+            : 0.025
+          const bScale = 1.0 + Math.sin(breathPhases[i]) * breathDepth
+
+          // Heartbeat: subtle y-axis micro-judder
+          const hScale = Math.sin(hrPhase) * 0.004
+
+          // Movement drift driven by smoothed Intensity
+          const moveIntensity = Math.max(0, (smoothedIntensity - 0.7) * 1.5)
+          const driftX = PERSON_ROOTS[i].x + Math.sin(t_clock * 0.5 + i) * moveIntensity * 1.2
+          const driftZ = PERSON_ROOTS[i].z + Math.cos(t_clock * 0.4 + i * 2) * moveIntensity * 1.2
+          
+          // Face the direction of movement (or the node if static)
+          const lookTargetX = moveIntensity > 0.1 ? driftX + Math.cos(t_clock * 0.5 + i) : -3
+          const lookTargetZ = moveIntensity > 0.1 ? driftZ - Math.sin(t_clock * 0.4 + i * 2) : -2
+          const angle = Math.atan2(-(driftX - lookTargetX), -(driftZ - lookTargetZ))
+          lastAngles[i] = angle
+
+          // Walk phase scales with movement intensity
+          const walkPhase = t_clock * moveIntensity * 4.0
+          const kps = buildSkeletonKeypoints(driftX, driftZ, bScale, walkPhase, angle)
+
+          data.joints.forEach((m: THREE.Mesh, j: number) => {
             m.position.copy(kps[j])
-            const jMat = m.material as THREE.MeshStandardMaterial
-            jMat.transparent = false; jMat.depthWrite = true
+            if (j <= 12) m.position.y += hScale
+            ;(m.material as THREE.MeshStandardMaterial).transparent = false
+            ;(m.material as THREE.MeshStandardMaterial).depthWrite = true
           })
-          SKELETON_EDGES.forEach(([a, b], j) => { data.bones[j].geometry.setFromPoints([kps[a], kps[b]]); data.bones[j].geometry.attributes.position.needsUpdate = true })
-        } else { data.group.visible = false }
+          SKELETON_EDGES.forEach(([a, b], j) => {
+            data.bones[j].geometry.setFromPoints([kps[a], kps[b]])
+            ;(data.bones[j].geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true
+          })
+        } else {
+          data.group.visible = false
+        }
       })
 
-      // Heatmap update
+      // ── Heatmap – CSI energy projected onto floor ────────────────
       const colors = heatGeo.attributes.color.array as Float32Array
+      const positions = heatGeo.attributes.position.array as Float32Array
+      const isLight = checkLight()
       let cIdx = 0
       for (let xi = 0; xi < HEAT_RES; xi++) {
         for (let zi = 0; zi < HEAT_RES; zi++) {
-          const px = (xi / (HEAT_RES - 1)) * 10 - 5; const pz = (zi / (HEAT_RES - 1)) * 10 - 5
+          const px = (xi / (HEAT_RES - 1)) * 10 - 5
+          const pz = (zi / (HEAT_RES - 1)) * 10 - 5
+
+          // Node contribution
           let h = Math.max(0, 1 - Math.sqrt((px + 3) ** 2 + (pz + 2) ** 2) / 5) * 0.2
-          for (let pIdx = 0; pIdx < count; pIdx++) h += Math.max(0, 1 - Math.sqrt((px - PERSON_ROOTS[pIdx].x) ** 2 + (pz - PERSON_ROOTS[pIdx].z) ** 2) / 2.5) * 1.5
+
+          // Person presence contributions
+          for (let pIdx = 0; pIdx < personCount; pIdx++) {
+            h += Math.max(0, 1 - Math.sqrt((px - PERSON_ROOTS[pIdx].x) ** 2 + (pz - PERSON_ROOTS[pIdx].z) ** 2) / 2.5) * 1.5
+          }
           h = Math.min(1, h)
-          colors[cIdx*3+0] = h; colors[cIdx*3+1] = 0.9 - h*0.7; colors[cIdx*3+2] = 1 - h*0.8; cIdx++
+
+          // CSI wave ripple: subcarrier mapped onto floor radially from node
+          let wifiRipple = 0
+          if (rawAmps.length > 0) {
+            const distNode = Math.sqrt((px + 3) ** 2 + (pz + 2) ** 2)
+            const sc = Math.floor(distNode * 3) % rawAmps.length
+            const amp = rawAmps[sc] ?? 1.0
+            wifiRipple = (amp - 1.0) * 0.6 * Math.max(0, 1 - distNode / 9) * smoothedIntensity
+          }
+
+          // Keep points flat on ground
+          positions[cIdx * 3 + 1] = 0.015
+
+          if (isLight) {
+            colors[cIdx * 3 + 0] = 0.1 + (h + Math.abs(wifiRipple)) * 0.85
+            colors[cIdx * 3 + 1] = 0.2 * (1 - h)
+            colors[cIdx * 3 + 2] = 0.5 * (1 - h)
+          } else {
+            colors[cIdx * 3 + 0] = h + Math.abs(wifiRipple) * 0.7
+            colors[cIdx * 3 + 1] = 0.9 - h * 0.7
+            colors[cIdx * 3 + 2] = 1 - h * 0.8 + wifiRipple * 0.5
+          }
+          cIdx++
         }
       }
       heatGeo.attributes.color.needsUpdate = true
+      heatGeo.attributes.position.needsUpdate = true
 
-      // SMOOTH DAMPING (Fix: Ultra smooth orbit)
+      // ── Orbit camera ─────────────────────────────────────────────
       const orbit = orbitRef.current
-      if (!orbit.isOrbiting) orbit.targetTheta += dt * 0.05 // Gentle auto-rotation
-      
-      const damping = 0.12 // Smoothing factor
+      if (!orbit.isOrbiting) orbit.targetTheta += dt * 0.05
+
+      const damping = 0.12
       orbit.currentTheta += (orbit.targetTheta - orbit.currentTheta) * damping
       orbit.currentPhi += (orbit.targetPhi - orbit.currentPhi) * damping
       orbit.currentRadius += (orbit.targetRadius - orbit.currentRadius) * damping
@@ -276,81 +414,98 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
         orbit.currentRadius * Math.sin(cp) * Math.cos(orbit.currentTheta)
       )
       camera.lookAt(0, 0.5, 0)
-      
+
       renderer.render(scene, camera)
     }
     animate()
 
-    // INTERACTION HANDLERS (Pointer API for multi-modal support)
-    const onMouseDown = (e: MouseEvent) => { 
+    // ── Input Handlers ────────────────────────────────────────────────
+    const onMouseDown = (e: MouseEvent) => {
       lastStateRef.current = { active: true, lastX: e.clientX, lastY: e.clientY }
-      orbitRef.current.isOrbiting = true 
+      orbitRef.current.isOrbiting = true
     }
     const onMouseMove = (e: MouseEvent) => {
       if (!lastStateRef.current.active) return
-      const dx = e.clientX - lastStateRef.current.lastX; const dy = e.clientY - lastStateRef.current.lastY
+      const dx = e.clientX - lastStateRef.current.lastX
+      const dy = e.clientY - lastStateRef.current.lastY
       orbitRef.current.targetTheta -= dx * 0.005
       orbitRef.current.targetPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, orbitRef.current.targetPhi - dy * 0.005))
-      lastStateRef.current.lastX = e.clientX; lastStateRef.current.lastY = e.clientY
+      lastStateRef.current.lastX = e.clientX
+      lastStateRef.current.lastY = e.clientY
     }
     const onMouseUp = () => { lastStateRef.current.active = false }
 
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) { 
+      if (e.touches.length === 1) {
         lastStateRef.current = { active: true, lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
-        orbitRef.current.isOrbiting = true 
+        orbitRef.current.isOrbiting = true
       }
-      if (e.touches.length === 2) { 
-        e.preventDefault() 
+      if (e.touches.length === 2) {
+        e.preventDefault()
         lastStateRef.current.active = false
-        const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY
-        lastPinchDistRef.current = Math.sqrt(dx*dx + dy*dy)
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        lastPinchDistRef.current = Math.sqrt(dx * dx + dy * dy)
       }
     }
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 1 && lastStateRef.current.active) {
-        const dx = e.touches[0].clientX - lastStateRef.current.lastX; const dy = e.touches[0].clientY - lastStateRef.current.lastY
+        const dx = e.touches[0].clientX - lastStateRef.current.lastX
+        const dy = e.touches[0].clientY - lastStateRef.current.lastY
         orbitRef.current.targetTheta -= dx * 0.005
         orbitRef.current.targetPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, orbitRef.current.targetPhi - dy * 0.005))
-        lastStateRef.current.lastX = e.touches[0].clientX; lastStateRef.current.lastY = e.touches[0].clientY
+        lastStateRef.current.lastX = e.touches[0].clientX
+        lastStateRef.current.lastY = e.touches[0].clientY
       }
       if (e.touches.length === 2) {
         e.preventDefault()
-        const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY
-        const d = Math.sqrt(dx*dx + dy*dy)
-        if (lastPinchDistRef.current > 0) orbitRef.current.targetRadius = Math.max(3, Math.min(16, orbitRef.current.targetRadius * (lastPinchDistRef.current / d)))
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const d = Math.sqrt(dx * dx + dy * dy)
+        if (lastPinchDistRef.current > 0) {
+          orbitRef.current.targetRadius = Math.max(3, Math.min(16, orbitRef.current.targetRadius * (lastPinchDistRef.current / d)))
+        }
         lastPinchDistRef.current = d
       }
     }
-    const onWheel = (e: WheelEvent) => { 
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      orbitRef.current.targetRadius = Math.max(3, Math.min(16, orbitRef.current.targetRadius + e.deltaY * 0.005)) 
+      orbitRef.current.targetRadius = Math.max(3, Math.min(16, orbitRef.current.targetRadius + e.deltaY * 0.005))
     }
-
-    container.addEventListener('mousedown', onMouseDown); window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp)
-    container.addEventListener('touchstart', onTouchStart, { passive: false }); container.addEventListener('touchmove', onTouchMove, { passive: false }); container.addEventListener('wheel', onWheel, { passive: false })
-
-    const onKey = (e: KeyboardEvent) => { 
+    const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'r') {
         orbitRef.current.targetTheta = 0.3
         orbitRef.current.targetPhi = 0.45
         orbitRef.current.targetRadius = 9
       }
     }
+
+    container.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    container.addEventListener('touchstart', onTouchStart, { passive: false })
+    container.addEventListener('touchmove', onTouchMove, { passive: false })
+    container.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKey)
-    
+
     return () => {
       ro.disconnect()
-      container.removeEventListener('mousedown', onMouseDown); window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp)
-      container.removeEventListener('touchstart', onTouchStart); container.removeEventListener('touchmove', onTouchMove); container.removeEventListener('wheel', onWheel)
+      container.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      container.removeEventListener('touchstart', onTouchStart)
+      container.removeEventListener('touchmove', onTouchMove)
+      container.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKey)
-      renderer.dispose(); if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
+      if (themeObserver) themeObserver.disconnect()
+      renderer.dispose()
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
     }
   }, [connected])
 
   return (
-    <div ref={containerRef} className="wifi-viz-container relative overflow-hidden w-full h-full bg-[#080809] touch-none shadow-inner">
-      
+    <div ref={containerRef} className="wifi-viz-container relative overflow-hidden w-full h-full touch-none shadow-inner" style={{ background: 'var(--color-bg-primary)' }}>
+
       {/* Fullscreen Button */}
       <button
         onClick={() => {
@@ -375,7 +530,7 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
         )}
       </button>
 
-      {/* Fullscreen Overlay (Fix 4b) */}
+      {/* Fullscreen Overlay */}
       {isFullscreen && frame && (
         <div className="absolute bottom-12 left-12 z-10 flex flex-col gap-10 pointer-events-none">
           <div className="flex items-center gap-10">
@@ -386,7 +541,6 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
               </span>
             </div>
           </div>
-
           <div className="flex items-stretch gap-1">
             <div className="flex flex-col gap-4 bg-base-white/85 backdrop-blur-sm px-16 py-12 border border-accent-metal/20 border-r-0">
               <span className="text-caption-30 uppercase tracking-widest text-accent-metal" style={{ fontWeight: 300, fontSize: '0.9rem' }}>Breathing</span>
@@ -397,7 +551,6 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
                 <span className="text-accent-metal" style={{ fontSize: '1.0rem' }}>bpm</span>
               </div>
             </div>
-
             <div className="flex flex-col gap-4 bg-base-white/85 backdrop-blur-sm px-16 py-12 border border-accent-metal/20 border-r-0">
               <span className="text-caption-30 uppercase tracking-widest text-accent-metal" style={{ fontWeight: 300, fontSize: '0.9rem' }}>Heart Rate</span>
               <div className="flex items-baseline gap-4">
@@ -407,7 +560,6 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
                 <span className="text-accent-metal" style={{ fontSize: '1.0rem' }}>bpm</span>
               </div>
             </div>
-
             <div className="flex flex-col justify-center gap-4 bg-base-white/85 backdrop-blur-sm px-16 py-12 border border-accent-metal/20">
               <span className="text-caption-30 uppercase tracking-widest text-accent-metal" style={{ fontWeight: 300, fontSize: '0.9rem' }}>Presence</span>
               <span className={`inline-flex items-center gap-6 px-10 py-5 rounded-full text-caption-30 uppercase tracking-wider font-medium w-fit
@@ -428,8 +580,8 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
       {!connected && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#080809] z-20 pointer-events-none">
           <div className="flex flex-col items-center gap-16">
-             <div className="size-24 border border-accent-metal/20 border-t-accent-earth rounded-full animate-spin" />
-             <span className="font-serif italic text-caption-30 text-accent-metal uppercase tracking-widest">Awaiting Signal</span>
+            <div className="size-24 border border-accent-metal/20 border-t-accent-earth rounded-full animate-spin" />
+            <span className="font-serif italic text-caption-30 text-accent-metal uppercase tracking-widest">Awaiting Signal</span>
           </div>
         </div>
       )}

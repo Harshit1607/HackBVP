@@ -12,10 +12,24 @@ export function useReveal() {
           }
         })
       },
-      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+      { 
+        threshold: 0.05, 
+        rootMargin: '0px 0px 100px 0px' // Trigger 100px before entering viewport
+      }
     )
 
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el))
-    return () => observer.disconnect()
+    const observeElements = () => {
+      document.querySelectorAll('.reveal:not(.active)').forEach(el => observer.observe(el))
+    }
+
+    observeElements()
+    
+    // Fallback: Re-scan after a short delay to catch elements added by late renders
+    const timer = setTimeout(observeElements, 1000)
+
+    return () => {
+      observer.disconnect()
+      clearTimeout(timer)
+    }
   }, [])
 }

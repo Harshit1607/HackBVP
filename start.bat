@@ -1,56 +1,25 @@
 @echo off
-SETLOCAL EnableDelayedExpansion
+title WiFi-DensePose Platform
+echo =======================================
+echo   Starting WiFi-DensePose Platform
+echo =======================================
 
-:: --- CONFIGURATION ---
-set FRONTEND_DIR=frontend
-set ENV_FILE=%FRONTEND_DIR%\.env.local
+echo [INFO] Starting Backend...
+start /b "WiFi-DensePose Backend" cmd /c "cd backend & (if exist .venv\Scripts\activate.bat (call .venv\Scripts\activate.bat) else if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat) else (echo [WARN] No virtual environment found.)) & python -m uvicorn api.main:app --reload --port 8001"
 
-:: --- UI HEADER ---
-cls
+:: Brief pause to let backend spin up slightly
+timeout /t 2 /nobreak >nul
+
+echo [INFO] Starting Frontend...
+start /b "WiFi-DensePose Frontend" cmd /c "cd frontend & npm run dev"
+
 echo.
-echo  ##########################################################
-echo  #                                                        #
-echo  #    RUVIEW : TACTICAL BIOMETRIC OBSERVATORY v4.0        #
-echo  #    --------------------------------------------        #
-echo  #    [ MISSION-CRITICAL FRONTEND LAUNCHER ]              #
-echo  #                                                        #
-echo  ##########################################################
+echo Both services have been launched in the background!
+echo Logs will appear in this terminal.
 echo.
-
-:: --- DIRECTORY CHECK ---
-if not exist "%FRONTEND_DIR%" (
-    echo [ ERROR ] CANNOT LOCATE %FRONTEND_DIR% DIRECTORY.
-    echo [ ACTION ] PLEASE ENSURE YOU ARE IN THE PROJECT ROOT.
-    pause
-    exit /b
-)
-
-:: --- ENVIRONMENT SETUP ---
-echo [ SYS ] CONFIGURING LOCAL ENVIRONMENT...
+echo Backend:  http://localhost:8001/docs
+echo Frontend: http://localhost:3000
+echo =======================================
 echo.
-echo # RuView Local Config > "%ENV_FILE%"
-echo NEXT_PUBLIC_USE_MOCK=true >> "%ENV_FILE%"
-echo NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/sensing >> "%ENV_FILE%"
-echo NEXT_PUBLIC_API_URL=http://localhost:8000 >> "%ENV_FILE%"
-
-echo [ OK  ] MOCK_MODE ENABLED (BYPASSING BACKEND PORT 8000)
-echo [ OK  ] %ENV_FILE% GENERATED
-echo.
-
-:: --- NODE_MODULES CHECK ---
-if not exist "%FRONTEND_DIR%\node_modules" (
-    echo [ INFO ] NODE_MODULES NOT FOUND. INITIALIZING NPM INSTALL...
-    cd %FRONTEND_DIR%
-    call npm install
-    cd ..
-)
-
-:: --- LAUNCH ---
-echo [ SYS ] COMMENCING FRONTEND DEPLOYMENT...
-echo [ SYS ] STATUS: LINKING TO CLIENT INTERFACE...
-echo.
-cd %FRONTEND_DIR%
-npm run dev
-
-:: --- CLEANUP ---
+echo Press any key to stop the batch (Note: background tasks may need manual termination if not integrated with IDE).
 pause
