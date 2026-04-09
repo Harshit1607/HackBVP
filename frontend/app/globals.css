@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-signal: #00d4aa;
+  --color-signal-dim: #00b8d9;
+  --color-alert: #f59e0b;
+  --color-panel: #0f1318;
+  --color-base: #0a0d12;
+  --color-danger: #ef4444;
+
+  --font-mono: var(--font-mono), monospace;
+  --font-sans: var(--font-sans), sans-serif;
+
+  --background-image-grid-pattern: linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px), 
+    linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+  
+  --animate-scanline: scan 8s linear infinite;
+  
+  @keyframes scan {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+}
+
+/* Base resets & global styles */
+@layer base {
+  body {
+    @apply bg-base text-white;
+  }
+}
+
+/* Custom UI Utilites */
+@layer utilities {
+  .tactical-border {
+    @apply border border-signal/20;
+  }
+  
+  .glow-text {
+    text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);
+  }
+}
+
+/* Scanline Effect Overlay */
+.scanline-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(to bottom, rgba(0, 212, 170, 0.05), transparent);
+  pointer-events: none;
+  z-index: 9999;
+  animation: var(--animate-scanline);
+}
+
+/* Custom Scrollbar for Terminal aesthetics */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-signal-dim);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-signal);
+}
