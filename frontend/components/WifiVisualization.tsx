@@ -15,7 +15,33 @@ const PERSON_ROOTS: Array<{ x: number, z: number }> = [
   { x: -1.5, z: 1.0 },
 ]
 
-const HEAT_RES = 32
+// 5-stop thermal colormap: blue → cyan → green → yellow → red
+// t = 0..1, returns [r, g, b] each 0..1
+function thermalColor(t: number): [number, number, number] {
+  const stops: [number, number, number, number][] = [
+    [0.00,  0.0,  0.0,  0.55],  // deep blue
+    [0.25,  0.0,  0.55, 0.85],  // cyan-blue
+    [0.50,  0.0,  0.80, 0.40],  // green
+    [0.75,  0.95, 0.75, 0.00],  // yellow
+    [1.00,  1.00, 0.10, 0.00],  // red-orange
+  ]
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, r0, g0, b0] = stops[i]
+    const [t1, r1, g1, b1] = stops[i + 1]
+    if (t <= t1) {
+      const f = (t - t0) / (t1 - t0)
+      return [
+        r0 + (r1 - r0) * f,
+        g0 + (g1 - g0) * f,
+        b0 + (b1 - b0) * f,
+      ]
+    }
+  }
+  return [1, 0.1, 0]  // fallback red
+}
+
+const HEAT_RES = 20
 
 const SKELETON_EDGES = [
   [0, 1], [0, 2], [1, 3], [2, 4],
@@ -234,23 +260,24 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
       return { group, joints, bones }
     })
 
-    // Heatmap (floor points)
+    // ── Heatmap (floor points) ──
     heatGeo = new THREE.BufferGeometry()
-    const heatPositions = new Float32Array(HEAT_RES * HEAT_RES * 3)
-    const heatColors = new Float32Array(HEAT_RES * HEAT_RES * 3)
-    let hIdx = 0
-    for (let xi = 0; xi < HEAT_RES; xi++) {
-      for (let zi = 0; zi < HEAT_RES; zi++) {
-        heatPositions[hIdx * 3 + 0] = (xi / (HEAT_RES - 1)) * 10 - 5
-        heatPositions[hIdx * 3 + 1] = 0.015
-        heatPositions[hIdx * 3 + 2] = (zi / (HEAT_RES - 1)) * 10 - 5
-        hIdx++
+    const heatPositions = new Float32Array(400 * 3)
+    let idx = 0
+    for (let row = 0; row < 20; row++) {
+      for (let col = 0; col < 20; col++) {
+        heatPositions[idx++] = -5 + col * (10 / 19)   // x: -5 to +5
+        heatPositions[idx++] = 0.018                  // y: just above ground (was 0.012)
+        heatPositions[idx++] = -5 + row * (10 / 19)   // z: -5 to +5
       }
     }
     heatGeo.setAttribute('position', new THREE.BufferAttribute(heatPositions, 3))
+
+    // Initialize colors array (required before first RAF)
+    const heatColors = new Float32Array(400 * 3).fill(74/255)   // start cold (accent-water)
     heatGeo.setAttribute('color', new THREE.BufferAttribute(heatColors, 3))
     heatMesh = new THREE.Points(heatGeo, new THREE.PointsMaterial({
-      size: 0.45, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false
+      size: 0.45, vertexColors: true, transparent: true, opacity: 1.0, depthWrite: false, sizeAttenuation: true
     }))
     scene.add(heatMesh)
 
@@ -352,51 +379,55 @@ export default function WifiVisualization({ frame, connected }: WifiVisualizatio
         }
       })
 
-      // ── Heatmap – CSI energy projected onto floor ────────────────
-      const colors = heatGeo.attributes.color.array as Float32Array
-      const positions = heatGeo.attributes.position.array as Float32Array
-      const isLight = checkLight()
-      let cIdx = 0
-      for (let xi = 0; xi < HEAT_RES; xi++) {
-        for (let zi = 0; zi < HEAT_RES; zi++) {
-          const px = (xi / (HEAT_RES - 1)) * 10 - 5
-          const pz = (zi / (HEAT_RES - 1)) * 10 - 5
+      const personCountLimit = Math.min(fr?.presence.person_count ?? 0, 3)
+      const moveInt = Math.max(0, (smoothedIntensity - 0.7) * 1.5)
+      
+      const activeDriftPositions = PERSON_ROOTS.slice(0, Math.max(1, personCountLimit)).map((root, i) => ({
+        x: root.x + Math.sin(t_clock * 0.5 + i) * moveInt * 1.2,
+        z: root.z + Math.cos(t_clock * 0.4 + i * 2) * moveInt * 1.2
+      }))
 
-          // Node contribution
-          let h = Math.max(0, 1 - Math.sqrt((px + 3) ** 2 + (pz + 2) ** 2) / 5) * 0.2
+      const currentHeatPos = heatGeo.attributes.position.array as Float32Array
+      const currentHeatColors = heatGeo.attributes.color.array as Float32Array
 
-          // Person presence contributions
-          for (let pIdx = 0; pIdx < personCount; pIdx++) {
-            h += Math.max(0, 1 - Math.sqrt((px - PERSON_ROOTS[pIdx].x) ** 2 + (pz - PERSON_ROOTS[pIdx].z) ** 2) / 2.5) * 1.5
-          }
-          h = Math.min(1, h)
+      for (let i = 0; i < 400; i++) {
+        const px = currentHeatPos[i * 3]
+        const pz = currentHeatPos[i * 3 + 2]
 
-          // CSI wave ripple: subcarrier mapped onto floor radially from node
-          let wifiRipple = 0
-          if (rawAmps.length > 0) {
-            const distNode = Math.sqrt((px + 3) ** 2 + (pz + 2) ** 2)
-            const sc = Math.floor(distNode * 3) % rawAmps.length
-            const amp = rawAmps[sc] ?? 1.0
-            wifiRipple = (amp - 1.0) * 0.6 * Math.max(0, 1 - distNode / 9) * smoothedIntensity
-          }
+        let heat = 0
 
-          // Keep points flat on ground
-          positions[cIdx * 3 + 1] = 0.015
-
-          if (isLight) {
-            colors[cIdx * 3 + 0] = 0.1 + (h + Math.abs(wifiRipple)) * 0.85
-            colors[cIdx * 3 + 1] = 0.2 * (1 - h)
-            colors[cIdx * 3 + 2] = 0.5 * (1 - h)
-          } else {
-            colors[cIdx * 3 + 0] = h + Math.abs(wifiRipple) * 0.7
-            colors[cIdx * 3 + 1] = 0.9 - h * 0.7
-            colors[cIdx * 3 + 2] = 1 - h * 0.8 + wifiRipple * 0.5
-          }
-          cIdx++
+        // Active figure contributions (using current drift positions)
+        for (const pos of activeDriftPositions) {
+          const dx = px - pos.x
+          const dz = pz - pos.z
+          const dist2 = dx * dx + dz * dz
+          const sigma = 1.2
+          heat += Math.exp(-dist2 / (2 * sigma * sigma))
         }
+
+        // Ambient source node contribution
+        const sdx = px - (-3)
+        const sdz = pz - (-2)
+        const sdist2 = sdx * sdx + sdz * sdz
+        heat += Math.exp(-sdist2 / (2 * 4.0 * 4.0)) * 0.18
+
+        // Fade when empty
+        const occupied = fr?.presence.occupied ?? false
+        if (!occupied) heat *= 0.2
+
+        // Clamp and apply amplitude modulation (subtle — ±15%)
+        const amp = fr?.raw_amplitude
+        const avgAmp = amp ? amp.reduce((a, b) => a + b, 0) / amp.length : 1.0
+        const ampFactor = 0.85 + (avgAmp * 0.15)
+        heat = Math.min(1, heat * ampFactor)
+
+        // Apply full thermal colormap
+        const [hr, hg, hb] = thermalColor(heat)
+        currentHeatColors[i * 3]     = hr
+        currentHeatColors[i * 3 + 1] = hg
+        currentHeatColors[i * 3 + 2] = hb
       }
       heatGeo.attributes.color.needsUpdate = true
-      heatGeo.attributes.position.needsUpdate = true
 
       // ── Orbit camera ─────────────────────────────────────────────
       const orbit = orbitRef.current

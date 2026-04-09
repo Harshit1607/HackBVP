@@ -77,13 +77,13 @@ function RadialGauge({
   const pct = Math.round(value * 100)
 
   return (
-    <div className="flex flex-col items-center gap-8">
+    <div className="flex flex-col items-center gap-10">
       <svg viewBox="0 0 88 52" className="w-full" style={{ maxWidth: '11rem' }}>
-        {/* Track arc — bottom half circle */}
+        {/* Track arc — subtle white track on dark */}
         <path
           d={`M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`}
           fill="none"
-          stroke="rgb(240,240,239)"
+          stroke="rgba(255,255,255,0.12)"
           strokeWidth="5"
           strokeLinecap="round"
         />
@@ -97,19 +97,21 @@ function RadialGauge({
           strokeDasharray={`${progress} ${circumference}`}
           style={{ transition: 'stroke-dasharray 0.7s cubic-bezier(0.19,1,0.22,1)' }}
         />
-        {/* Center value */}
+        {/* Center value — white on dark */}
         <text x={CX} y={CY - 4} textAnchor="middle"
           fontFamily="'Instrument Serif', serif"
-          fontSize="18" fill="rgb(26,26,30)" fontWeight="400">
+          fontSize="18" fill="rgba(255,255,255,0.9)" fontWeight="400">
           {pct}
         </text>
+        {/* % label — muted white */}
         <text x={CX} y={CY + 10} textAnchor="middle"
           fontFamily="'Instrument Sans', sans-serif"
-          fontSize="7" fill="rgb(193,194,189)" letterSpacing="1">
+          fontSize="7" fill="rgba(255,255,255,0.35)" letterSpacing="1">
           %
         </text>
       </svg>
-      <span className="text-caption-30 uppercase tracking-widest text-accent-metal font-light text-center">
+      <span className="text-caption-30 uppercase tracking-widest font-light text-center"
+        style={{ color: 'rgba(255,255,255,0.45)' }}>
         {label}
       </span>
     </div>
@@ -361,7 +363,7 @@ export default function Dashboard() {
                     <span className={`w-3 h-3 rounded-full flex-shrink-0 ${connected ? 'bg-accent-fire/70 ripple' : 'bg-accent-metal/30'}`} />
                     <span className="text-caption-30 uppercase tracking-widest text-accent-fire font-light group-hover/btn:text-accent-fire/80 transition-colors">
                       {sourceType === 'mock' && 'Simulated Stream'}
-                      {sourceType === 'socket' && 'Hardware (WS:8000)'}
+                      {sourceType === 'socket' && 'Hardware (WS:8001)'}
                       {sourceType === 'replay' && 'Replay Buffer'}
                       {!sourceType && (frame?.source ?? 'Awaiting selection')}
                     </span>
@@ -964,7 +966,7 @@ export default function Dashboard() {
           <div className="px-8 pt-48 pb-48 flex flex-col justify-between">
             <div className="flex flex-col gap-12">
               <span className="font-serif text-title-10 text-base-black reveal" style={{ fontWeight: 400 }}>
-                RuView
+                RaVis
               </span>
               <span className="text-caption-30 uppercase tracking-widest text-accent-metal font-light reveal">
                 (WiFi Sensing)
@@ -974,7 +976,7 @@ export default function Dashboard() {
               </p>
             </div>
             <span className="text-caption-30 text-accent-metal/50 font-light reveal">
-              © {new Date().getFullYear()} RuView
+              © {new Date().getFullYear()} RaVis
             </span>
           </div>
 

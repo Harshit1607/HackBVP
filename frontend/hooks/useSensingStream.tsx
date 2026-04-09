@@ -14,7 +14,7 @@ export interface StreamState {
   setSourceType: (type: 'mock' | 'socket' | 'replay') => void
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/sensing'
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8001/ws/sensing'
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true'
 
 const SensingContext = createContext<StreamState | undefined>(undefined)
@@ -37,7 +37,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
     frameTimestamps.current = []
 
     if (sourceType === 'mock') {
-      console.log('RuView: Using mock data stream')
+      console.log('RaVis: Using mock data stream')
       const interval = setInterval(() => {
         const now = Date.now()
         const t = now / 1000
@@ -80,7 +80,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
       let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
       const connect = () => {
-        console.log('RuView: Connecting to sensing stream...')
+        console.log('RaVis: Connecting to sensing stream...')
         socket = new WebSocket(WS_URL)
 
         socket.onopen = () => {

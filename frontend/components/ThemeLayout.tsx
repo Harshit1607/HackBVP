@@ -40,7 +40,7 @@ export default function ThemeLayout({ children }: ThemeLayoutProps) {
                   <span className="nav-link-overflow block w-full h-[var(--header-height)] overflow-hidden">
                     <span className="nav-link-inner flex flex-col w-full">
                       <span className="nav-link-text flex items-center px-8 h-[var(--header-height)] text-caption-30-fixed uppercase font-serif text-base-black w-full">
-                        RuView <span className="ml-4 opacity-40 font-mono text-[0.6rem]">{theme.toUpperCase()}</span>
+                        RaVis <span className="ml-4 opacity-40 font-mono text-[0.6rem]">{theme.toUpperCase()}</span>
                       </span>
                       <span className="nav-link-text flex items-center px-8 h-[var(--header-height)] text-caption-30-fixed uppercase font-serif bg-accent-earth text-base-white w-full">
                         {theme === 'obsidian' ? 'Switch to GitHub' : theme === 'github' ? 'Switch to Light' : 'Return Obsidian'}
@@ -106,7 +106,7 @@ export default function ThemeLayout({ children }: ThemeLayoutProps) {
       <header className="fixed inset-x-0 bottom-0 z-4 block px-8 pb-8 lg:hidden">
         <nav className="grid grid-cols-[1fr,8.8rem] border-x border-t border-accent-metal/20 bg-base-white">
           <Link href="/" className="block h-32 overflow-hidden border-b border-accent-metal/20 px-8 text-caption-30-fixed uppercase leading-[3.2rem]">
-            <span className="font-medium">RuView</span> <span className="font-serif">(WiFi)</span>
+            <span className="font-medium">RaVis</span> <span className="font-serif">(WiFi)</span>
           </Link>
           <button 
             onClick={cycleTheme}

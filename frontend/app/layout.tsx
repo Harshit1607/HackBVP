@@ -20,7 +20,7 @@ const instrumentSerif = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  title: 'RuView | WiFi Sensing Platform',
+  title: 'RaVis | WiFi Sensing Platform',
   description: 'Precision environmental monitoring through signal analysis.',
 }
 

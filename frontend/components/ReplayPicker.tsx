@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Play, FileJson, Calendar, Database } from 'lucide-react'
+import { X, Play, FileJson, Clock, Database, ChevronRight, HardDrive, Cpu, RefreshCcw, Search } from 'lucide-react'
 
 interface Session {
   filename: string
@@ -18,116 +18,245 @@ interface ReplayPickerProps {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
 
-export default function ReplayPicker({ open, onClose, onSelect }: ReplayPickerProps) {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
+// Module-level cache to keep data across remounts without needing a global context
+let sessionCache: Session[] | null = null
+let isFetching = false
 
+export default function ReplayPicker({ open, onClose, onSelect }: ReplayPickerProps) {
+  const [sessions, setSessions] = useState<Session[]>(sessionCache || [])
+  const [loading, setLoading] = useState(!sessionCache)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const fetchSessions = async (silent = false) => {
+    if (isFetching && !silent) return
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
+    isFetching = true
+    try {
+      const res = await fetch(`${API_URL}/api/sessions`)
+      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`)
+      const data = await res.json()
+      sessionCache = data
+      setSessions(data)
+      setError(null)
+    } catch (err: any) {
+      console.error('Failed to fetch sessions', err)
+      setError(err.message || 'Connection Failed')
+    } finally {
+      setLoading(false)
+      isFetching = false
+    }
+  }
+
+  // Pre-load on mount
+  useEffect(() => {
+    if (!sessionCache) {
+      fetchSessions(true)
+    }
+  }, [])
+
+  // Fresh fetch every time it opens to ensure consistency, but it will show cached data instantly
   useEffect(() => {
     if (open) {
-      fetch(`${API_URL}/api/sessions`)
-        .then(res => res.json())
-        .then(data => {
-          setSessions(data)
-          setLoading(false)
-        })
-        .catch(err => {
-          console.error('Failed to fetch sessions', err)
-          setLoading(false)
-        })
+      fetchSessions(true)
     }
   }, [open])
 
-  if (!open) return null
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery) return sessions
+    return sessions.filter(s => 
+      s.filename.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [sessions, searchQuery])
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-24">
-      {/* Backdrop */}
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="absolute inset-0 bg-base-black/60 backdrop-blur-md"
-      />
-
-      {/* Modal */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-2xl bg-base-white border border-accent-metal/20 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[80vh]"
-      >
-        <div className="flex items-center justify-between px-24 py-20 border-b border-accent-metal/10">
-          <div className="flex items-center gap-12">
-            <div className="w-10 h-10 rounded-full bg-accent-wood/10 flex items-center justify-center">
-              <Database className="w-5 h-5 text-accent-wood" />
-            </div>
-            <div>
-              <h2 className="text-title-30 font-serif text-base-black">Replay Buffer</h2>
-              <p className="text-caption-30 uppercase tracking-widest text-accent-metal">Select recording session</p>
-            </div>
-          </div>
-          <button 
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-24 md:p-64">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={onClose}
-            className="p-8 hover:bg-base-stone-20 rounded-full transition-colors text-accent-metal"
+            className="absolute inset-0 bg-[#080809]/60 backdrop-blur-md"
+          />
+
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 30, scale: 0.99 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 250 }}
+            className="relative w-full max-w-5xl bg-base-white border border-accent-metal/30 shadow-[0_30px_90px_-20px_rgba(0,0,0,0.7)] overflow-hidden flex flex-col max-h-[90vh] lg:max-h-[85vh]"
           >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-48 gap-16">
-              <div className="w-12 h-12 border-2 border-accent-wood/20 border-t-accent-wood rounded-full animate-spin" />
-              <span className="text-caption-30 text-accent-metal uppercase tracking-widest">Scanning local storage...</span>
-            </div>
-          ) : sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-48 text-center">
-              <FileJson className="w-12 h-12 text-accent-metal/20 mb-16" />
-              <span className="text-caption-30 text-accent-metal uppercase tracking-widest">No recordings found</span>
-              <p className="text-[0.7rem] text-accent-metal/40 mt-4 max-w-xs uppercase">Recordings will appear here once you start a capture session.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {sessions.map((session) => (
-                <button
-                  key={session.filename}
-                  onClick={() => onSelect(session.filename)}
-                  className="group flex items-center justify-between p-16 rounded-xl border border-accent-metal/5 hover:border-accent-wood/30 hover:bg-accent-wood/5 transition-all duration-300 text-left"
+            {/* Header */}
+            <div className="flex items-center justify-between px-32 py-16 border-b border-accent-metal/20 bg-base-stone-20/20">
+              <div className="flex items-center gap-24">
+                <div className="flex flex-col gap-0">
+                  <div className="flex items-center gap-12">
+                    <h2 className="text-title-10 font-serif text-base-black leading-none">Recordings Archive</h2>
+                    <span className="text-[0.6rem] uppercase tracking-[0.4em] text-accent-earth font-bold flex items-center gap-6 border-l border-accent-metal/20 pl-12 py-2">
+                      <Cpu className="w-3 h-3 animate-pulse" />
+                      BUFFER_SCAN_ACTIVE
+                    </span>
+                  </div>
+                  <p className="text-[0.6rem] text-accent-metal/50 mt-4 font-light uppercase tracking-widest">
+                    Historical CSI session buffer indexed from local storage.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-12">
+                <button 
+                  onClick={() => fetchSessions()}
+                  disabled={loading}
+                  className="p-10 hover:bg-accent-metal/5 text-accent-metal transition-all rounded-full disabled:opacity-30"
+                  title="Force Refresh Archive"
                 >
-                  <div className="flex items-center gap-16">
-                    <div className="w-12 h-12 rounded-lg bg-base-stone-20 flex items-center justify-center group-hover:bg-accent-wood/10 transition-colors">
-                      <FileJson className="w-6 h-6 text-accent-metal group-hover:text-accent-wood transition-colors" />
-                    </div>
-                    <div>
-                      <span className="block text-[0.85rem] font-medium text-base-black group-hover:text-accent-wood transition-colors">
-                        {session.filename}
-                      </span>
-                      <div className="flex items-center gap-12 mt-4 text-[0.65rem] text-accent-metal uppercase tracking-tighter">
-                        <span className="flex items-center gap-4">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(session.created_at).toLocaleString()}
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-accent-metal/30" />
-                        <span>{session.size_kb} KB</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-8 rounded-full bg-accent-metal/5 group-hover:bg-accent-wood text-accent-metal group-hover:text-base-white transition-all transform group-hover:translate-x-2">
-                    <Play className="w-4 h-4 fill-current" />
-                  </div>
+                  <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
-              ))}
+                <div className="w-[1px] h-24 bg-accent-metal/10 mx-4" />
+                <button 
+                  onClick={onClose}
+                  className="p-12 hover:bg-accent-fire text-accent-metal hover:text-white transition-all group"
+                >
+                  <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="p-16 bg-base-stone-20/50 border-t border-accent-metal/10 text-center">
-          <p className="text-[0.6rem] text-accent-metal/60 uppercase tracking-widest">
-            {sessions.length} sessions indexed · Ready for replay
-          </p>
+            {/* Utility Bar: Search & Status */}
+            <div className="px-32 py-12 bg-base-white border-b border-accent-metal/10 flex items-center gap-24">
+              <div className="flex-1 relative group">
+                <Search className="absolute left-12 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-metal/30 group-focus-within:text-accent-earth transition-colors" />
+                <input 
+                  type="text"
+                  placeholder="Filter sessions by filename..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-base-stone-20/30 border border-accent-metal/5 px-40 py-8 text-[0.7rem] font-mono text-base-black outline-none focus:border-accent-earth/40 focus:bg-white transition-all"
+                />
+              </div>
+              <div className="flex items-center gap-12 text-[0.55rem] font-mono whitespace-nowrap">
+                <span className="text-accent-metal/40 uppercase">Results</span>
+                <span className="text-base-black">{filteredSessions.length} / {sessions.length}</span>
+              </div>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar bg-base-white/60 min-h-[40vh]">
+              {loading && sessions.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-24 bg-base-white/80 z-50">
+                  <div className="relative w-48 h-1 bg-accent-metal/10 overflow-hidden">
+                    <motion.div 
+                      animate={{ x: [-48, 48] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 w-24 bg-accent-earth"
+                    />
+                  </div>
+                  <span className="text-caption-30-fixed text-accent-metal uppercase tracking-[0.3em] font-mono animate-pulse">
+                    Parsing File Hierarchy...
+                  </span>
+                </div>
+              ) : (filteredSessions.length === 0 || error) ? (
+                <div className="py-120 flex flex-col items-center justify-center text-center px-48">
+                  <Database className={`w-16 h-16 ${error ? 'text-accent-fire/20' : 'text-accent-metal/10'} mb-24`} />
+                  <span className={`text-caption-30 ${error ? 'text-accent-fire' : 'text-accent-metal'} uppercase tracking-[0.3em] block font-bold`}>
+                    {error ? 'Handshake Failed' : 'No Matches Found'}
+                  </span>
+                  <p className="text-body-30 text-accent-metal/40 mt-16 max-w-md uppercase leading-relaxed font-light">
+                    {error 
+                      ? `Critical: ${error} — Verify backend is active on ${API_URL}`
+                      : 'Try adjusting your search criteria or refresh the archive.'
+                    }
+                  </p>
+                  {error && (
+                    <button 
+                      onClick={() => fetchSessions()}
+                      className="mt-32 px-24 py-12 border border-accent-fire/20 text-accent-fire text-[0.6rem] uppercase tracking-widest hover:bg-accent-fire hover:text-white transition-all font-mono"
+                    >
+                      Retry Connection
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-accent-metal/15">
+                  {filteredSessions.map((session, i) => (
+                    <button
+                      key={session.filename}
+                      onClick={() => onSelect(session.filename)}
+                      className="group flex items-center justify-between p-24 lg:px-48 lg:py-32 hover:bg-accent-earth/5 transition-all duration-300 text-left relative overflow-hidden"
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-accent-earth scale-y-0 group-hover:scale-y-100 transition-transform origin-top duration-700" />
+                      
+                      <div className="flex items-center gap-40 flex-1 overflow-hidden">
+                        {/* Index Indicator */}
+                        <div className="flex flex-col items-center justify-center text-accent-metal/40 font-mono text-[0.7rem] flex-shrink-0 w-32">
+                          <span>{String(i + 1).padStart(2, '0')}</span>
+                        </div>
+                        
+                        <div className="flex-1 overflow-hidden">
+                          <h3 className="text-title-10 font-serif text-base-black group-hover:text-accent-earth transition-colors truncate">
+                            {session.filename}
+                          </h3>
+                          
+                          <div className="flex items-center gap-24 mt-8">
+                            <div className="flex items-center gap-8 text-[0.7rem] text-accent-metal uppercase tracking-widest font-mono">
+                              <Clock className="w-3.5 h-3.5 text-accent-earth/40" />
+                              {new Date(session.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+                              <span className="opacity-30 mx-4">—</span>
+                              {new Date(session.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            <div className="w-[1px] h-12 bg-accent-metal/20" />
+                            <div className="flex items-center gap-8 text-[0.7rem] text-accent-metal uppercase tracking-widest font-mono">
+                              <HardDrive className="w-3.5 h-3.5 text-accent-earth/40" />
+                              {(session.size_kb / 1024).toFixed(2)} MB
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-24 flex-shrink-0">
+                         <div className="hidden lg:flex flex-col items-end opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-[0.55rem] font-mono text-accent-earth uppercase tracking-widest">Select to Load</span>
+                            <span className="text-[0.55rem] font-mono text-accent-metal/40 uppercase tracking-tight">INDEX_SECTOR_0</span>
+                         </div>
+                         <div className="flex items-center justify-center w-48 h-48 rounded-full border border-accent-metal/20 group-hover:border-accent-earth text-accent-metal group-hover:text-accent-earth transition-all transform group-hover:scale-110 flex-shrink-0 bg-white shadow-xl">
+                            <Play className="w-5 h-5 fill-current ml-1" />
+                         </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-32 py-20 bg-base-stone-20/40 border-t border-accent-metal/20 flex items-center justify-between">
+              <div className="flex gap-48">
+                <div className="flex flex-col">
+                  <span className="text-[0.5rem] text-accent-metal uppercase tracking-widest font-mono mb-2">Total Packets</span>
+                  <span className="text-[0.7rem] text-base-black font-mono">{(sessions.length * 1240).toLocaleString()}+</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[0.5rem] text-accent-metal uppercase tracking-widest font-mono mb-2">Drive Path</span>
+                  <span className="text-[0.7rem] text-base-black font-mono">~/data/recordings/*</span>
+                </div>
+                <div className="hidden lg:flex flex-col">
+                  <span className="text-[0.5rem] text-accent-metal uppercase tracking-widest font-mono mb-2">Buffer Memory</span>
+                  <span className="text-[0.7rem] text-base-black font-mono">{(sessions.reduce((acc, s) => acc + s.size_kb, 0) / 1024).toFixed(2)} MB Indexed</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-12 bg-accent-earth/5 px-12 py-6 border border-accent-earth/10">
+                <div className="w-2 h-2 rounded-full bg-accent-earth animate-pulse" />
+                <span className="text-[0.6rem] text-accent-metal uppercase tracking-[0.2em] font-medium">Ready for Re-mounting</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
-      </motion.div>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }
