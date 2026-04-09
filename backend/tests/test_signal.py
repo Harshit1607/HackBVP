@@ -15,40 +15,36 @@ def test_hampel_filter_replaces_outlier():
 
 def test_vitals_extractor_buffering():
     """Verify that extractor returns None during warm-up phase (first 10 seconds)."""
-    # 20 FPS * 10 seconds = 200 samples
-    extractor = VitalSignsExtractor(fps=20, min_len=200)
+    # Use default 30s window_sec, but the extractor needs 10s (fps*10) to return data
+    fps = 20
+    extractor = VitalSignsExtractor(fps=fps)
     
     # Push 150 samples (7.5 seconds)
     for _ in range(150):
         extractor.push(1.0)
         
-    breath, hr, conf_b, conf_hr = extractor.extract()
+    breath, hr = extractor.extract()
     assert breath is None
     assert hr is None
-    assert conf_b == 0.0
-    assert conf_hr == 0.0
+    assert extractor.breathing_confidence() == 0.0
+    assert extractor.hr_confidence() == 0.0
 
 def test_vitals_extractor_accuracy():
     """Verify that extractor finds the frequency of a synthetic sine wave."""
     fps = 20
     # Create 30 seconds of data with a 15 BPM breathing signal
-    # 15 BPM = 0.25 Hz
     duration = 30
     t = np.linspace(0, duration, fps * duration)
     freq = 15 / 60
     # Add a pure sine wave on top of some base amplitude
     signal = 1.0 + 0.1 * np.sin(2 * np.pi * freq * t)
     
-    extractor = VitalSignsExtractor(fps=fps, min_len=200)
+    extractor = VitalSignsExtractor(fps=fps)
     for sample in signal:
         extractor.push(sample)
         
-    breath, hr, conf_b, conf_hr = extractor.extract()
+    breath, hr = extractor.extract()
     
     # We expect 15.0 BPM
     assert breath == pytest.approx(15.0, abs=1.0)
-    assert conf_b > 0.5 # Should be fairly confident in a clean sine wave
-
-
-
-
+    assert extractor.breathing_confidence() > 0.5

@@ -2,9 +2,9 @@ from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from state import sensing_state
-from api.routes import router as api_router
-from ws import router as ws_router
+from .state import sensing_state
+from .routes import router as api_router
+from .ws import router as ws_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -48,6 +48,7 @@ app.include_router(ws_router)
 @app.get("/")
 async def root():
     return {"message": "WiFi DensePose Backend is running.", "docs": "/docs"}
+
 
 
 
