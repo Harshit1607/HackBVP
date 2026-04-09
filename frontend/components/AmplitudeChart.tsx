@@ -1,113 +1,94 @@
 'use client'
 
 import React, { useEffect, useRef } from 'react'
-import type { SensingFrame } from '../lib/types'
+import type { SensingFrame } from '@/lib/types'
 
 interface AmplitudeChartProps {
   frame: SensingFrame | null
 }
 
-const AmplitudeChart: React.FC<AmplitudeChartProps> = ({ frame }) => {
+export default function AmplitudeChart({ frame }: AmplitudeChartProps) {
+  const amplitude = frame?.amplitude ?? null
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const bufferRef = useRef<number[][]>([])
-  const requestRef = useRef<number>()
-  const containerRef = useRef<HTMLDivElement>(null)
+  const animRef = useRef<number>()
+  const dataPoints = useRef<number[]>(new Array(150).fill(0))
 
-  // Buffer management
   useEffect(() => {
-    if (frame?.raw_amplitude) {
-      bufferRef.current.push(frame.raw_amplitude)
-      if (bufferRef.current.length > 200) {
-        bufferRef.current.shift()
-      }
-      
-      // Schedule draw
-      if (!requestRef.current) {
-        requestRef.current = requestAnimationFrame(draw)
-      }
-    }
-  }, [frame])
-
-  const draw = () => {
-    requestRef.current = undefined
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const { width, height } = canvas
-    ctx.clearRect(0, 0, width, height)
+    const dpr = window.devicePixelRatio || 1
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+    canvas.width = w * dpr
+    canvas.height = h * dpr
+    ctx.scale(dpr, dpr)
 
-    const buffer = bufferRef.current
-    if (buffer.length === 0) return
-
-    // Flatten or use latest? "Rolling canvas waveform" usually implies a history. 
-    // Here we'll draw the latest frame's raw_amplitude spread across the width.
-    const data = buffer[buffer.length - 1]
-    if (!data) return
-
-    // Find min/max for normalization
-    let min = Math.min(...data)
-    let max = Math.max(...data)
-    const range = max - min || 1
-
-    ctx.beginPath()
-    ctx.strokeStyle = '#00d4aa'
-    ctx.lineWidth = 1.5
-    ctx.lineJoin = 'round'
-
-    const step = width / (data.length - 1)
-    
-    data.forEach((val, i) => {
-      const x = i * step
-      const y = height - ((val - min) / range) * height
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    })
-
-    ctx.stroke()
-    
-    // Add subtle glow
-    ctx.shadowBlur = 4
-    ctx.shadowColor = '#00d4aa'
-    ctx.stroke()
-    ctx.shadowBlur = 0
-  }
-
-  // Handle resizing
-  useEffect(() => {
-    if (!containerRef.current || !canvasRef.current) return
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        if (canvasRef.current) {
-          canvasRef.current.width = entry.contentRect.width
-          canvasRef.current.height = entry.contentRect.height
-          draw()
-        }
+    const draw = () => {
+      // Background and grid lines
+      ctx.clearRect(0, 0, w, h)
+      ctx.strokeStyle = 'rgba(30, 32, 36, 0.5)'
+      ctx.lineWidth = 1
+      for (let i = 1; i < 4; i++) {
+        const y = (h / 4) * i
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(w, y)
+        ctx.stroke()
       }
-    })
 
-    resizeObserver.observe(containerRef.current)
-    return () => resizeObserver.disconnect()
-  }, [])
+      // Buffer management: only push if amplitude is not null
+      if (amplitude !== null) {
+        dataPoints.current.push(amplitude)
+      } else {
+        dataPoints.current.push(0)
+      }
+      if (dataPoints.current.length > 150) dataPoints.current.shift()
+
+      // Waveform Draw
+      ctx.beginPath()
+      ctx.strokeStyle = 'rgb(0 242 255)' // Neon Cyan
+      ctx.lineWidth = 2
+      const step = w / (dataPoints.current.length - 1)
+      
+      dataPoints.current.forEach((p, idx) => {
+        const x = idx * step
+        const normalized = (p + 1) / 2
+        const y = h - (normalized * h)
+        if (idx === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+
+      // Tech Gradient Fill
+      const grad = ctx.createLinearGradient(0, 0, 0, h)
+      grad.addColorStop(0, 'rgba(0, 242, 255, 0.1)')
+      grad.addColorStop(1, 'rgba(0, 242, 255, 0)')
+      ctx.fillStyle = grad
+      ctx.lineTo(w, h)
+      ctx.lineTo(0, h)
+      ctx.fill()
+
+      if (amplitude === null) {
+        ctx.font = '1.2rem "Instrument Serif", serif'
+        ctx.fillStyle = 'rgb(148 163 184)' // Sub-slate
+        ctx.textAlign = 'center'
+        ctx.fillText('Awaiting signal...', w / 2, h / 2)
+      }
+
+      animRef.current = requestAnimationFrame(draw)
+    }
+
+    draw()
+    return () => cancelAnimationFrame(animRef.current!)
+  }, [amplitude])
 
   return (
-    <div ref={containerRef} className="relative h-[120px] w-full border border-signal/15 bg-panel/50 overflow-hidden">
-      <div className="absolute top-2 left-3 z-10 font-mono text-[9px] uppercase tracking-widest text-signal/40">
-        Raw Signal Amplitude
-      </div>
-      <canvas ref={canvasRef} className="h-full w-full" />
-      
-      {/* Grid lines background */}
-      <div className="absolute inset-0 pointer-events-none opacity-5" 
-        style={{ 
-          backgroundImage: 'linear-gradient(rgba(0,212,170,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,170,0.1) 1px, transparent 1px)',
-          backgroundSize: '20px 20px'
-        }} 
-      />
+    <div className="relative h-[12rem] w-full border-t border-accent-metal/20 mt-32">
+       <span className="absolute -top-16 left-0 text-caption-30 text-accent-metal">AMPLITUDE SIGNAL — CHANNEL A</span>
+      <canvas ref={canvasRef} className="size-full" />
     </div>
   )
 }
-
-export default AmplitudeChart
