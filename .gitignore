@@ -57,8 +57,15 @@ tmp/
 .project
 .settings/
 
+# Project specific ignores
+**/node_modules/
+**/.next/
+**/build/
+**/dist/
+**/out/
+
 # Cloned site assets that should not be in main repo (optional)
-# cloned_anuchome/
+cloned_anuchome/
 
 # Python
 __pycache__/

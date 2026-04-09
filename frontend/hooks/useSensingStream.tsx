@@ -9,6 +9,7 @@ export interface StreamState {
   connected: boolean
   fps: number
   source: string
+  connectionStatus: 'connected' | 'reconnecting' | 'idle'
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/sensing'
@@ -22,6 +23,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
     connected: false,
     fps: 0,
     source: 'none',
+    connectionStatus: 'idle',
   })
 
   // FPS calculation buffer
@@ -31,13 +33,16 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
     if (USE_MOCK) {
       console.log('RuView: Using mock data stream')
       const interval = setInterval(() => {
-        const frame = {
+        const now = Date.now()
+        const amplitude = 0.5 + Math.sin(now * 0.005) * 0.2 + Math.random() * 0.05
+
+        const frame: SensingFrame = {
           ...MOCK_FRAME,
-          timestamp: Date.now() / 1000,
-          frame_id: `mock-${Date.now()}`,
+          timestamp: now / 1000,
+          frame_id: `mock-${now}`,
+          amplitude: amplitude,
         }
         
-        const now = Date.now()
         frameTimestamps.current.push(now)
         frameTimestamps.current = frameTimestamps.current.filter(t => now - t < 2000)
         const fps = frameTimestamps.current.length / 2
@@ -47,6 +52,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
           connected: true,
           fps,
           source: 'Live — simulator',
+          connectionStatus: 'connected',
         })
       }, 50) // 20Hz
 
@@ -62,7 +68,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
 
       socket.onopen = () => {
         console.log('RuView: Connected')
-        setState(prev => ({ ...prev, connected: true }))
+        setState(prev => ({ ...prev, connected: true, connectionStatus: 'connected' }))
         if (reconnectTimer) clearTimeout(reconnectTimer)
       }
 
@@ -86,6 +92,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
             connected: true,
             fps,
             source: displaySource,
+            connectionStatus: 'connected',
           })
         } catch (err) {
           console.error('Failed to parse frame', err)
@@ -94,7 +101,7 @@ export function SensingProvider({ children }: { children: React.ReactNode }) {
 
       socket.onclose = () => {
         console.log('RuView: Disconnected')
-        setState(prev => ({ ...prev, connected: false, fps: 0, source: 'Disconnected' }))
+        setState(prev => ({ ...prev, connected: false, fps: 0, source: 'Disconnected', connectionStatus: 'reconnecting' }))
         reconnectTimer = setTimeout(connect, 2000)
       }
 
